@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="HARQ ACK/NACK exchange between UE and NTN satellite. Companion to the Reference Plane podcast, Episode 1.">
+<meta name="theme-color" content="#001130">
+<meta property="og:title" content="HARQ in NTN | Reference Plane">
+<meta property="og:description" content="Watch the ACK/NACK pipeline stall as the link gets longer. Reference Plane podcast, Episode 1.">
+<meta property="og:type" content="website">
+<title>HARQ in NTN | Reference Plane</title>
+<style>
+:root{
+  --rs-font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --rs-font-mono:'SF Mono',Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;
+  --blue1:#003c74;--blue2:#00305f;--blue3:#002751;--blue4:#001d41;--blue5:#001130;
+  --cyan:#009fe3;--silver:#a5aaaf;--yellow:#ffe61a;--orange:#ea5b0c;--red:#a50f14;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:#000c1e;color:white;font-family:var(--rs-font-sans);min-height:100vh;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;padding:32px 24px;
+}
+@media (max-width:600px){body{padding:16px 12px}}
+.applet-wrapper{max-width:1100px;margin:0 auto}
+h1,h2,p{margin:0}
+
+.rs-panel{background:var(--blue1);border-radius:12px;padding:16px;color:white;box-sizing:border-box}
+.rs-panel-mid{background:var(--blue2)}
+.rs-panel-deep{background:var(--blue3)}
+.rs-label{font-size:11px;color:var(--cyan);letter-spacing:0.7px;margin:0 0 8px;font-weight:400}
+.rs-coll-title{font-size:11px;color:var(--cyan);letter-spacing:0.7px}
+.rs-section-title{font-size:15px;color:var(--yellow);letter-spacing:0.1px;margin:0 0 4px;font-weight:500}
+.rs-number-wrap{display:flex;align-items:baseline;gap:6px}
+.rs-number{font-family:var(--rs-font-mono);font-size:34px;font-weight:500;color:white;line-height:1;font-variant-numeric:tabular-nums}
+.rs-num-unit{font-size:14px;font-weight:400;color:var(--cyan)}
+.rs-mid{font-size:12px;color:white;margin:10px 0 0;line-height:1.4}
+.rs-mid-em{color:var(--cyan);font-weight:500}
+.rs-sub{font-size:11px;color:var(--silver);margin:8px 0 0;line-height:1.45}
+.rs-stat-k{font-size:11px;color:var(--cyan);letter-spacing:0.5px;margin:0}
+.rs-stat-v{font-family:var(--rs-font-mono);font-size:14px;font-weight:500;color:white;margin:2px 0 0;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--rs-font-mono);font-variant-numeric:tabular-nums}
+
+.rs-btn{background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.55);padding:5px 11px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;line-height:1.3;font-weight:400;transition:background 0.15s,border-color 0.15s,color 0.15s;outline:none;letter-spacing:0.2px}
+.rs-btn:hover:not(.active){background:rgba(0,159,227,0.18);border-color:rgba(0,159,227,0.5);color:white}
+.rs-btn.active{background:var(--blue5);border:1.5px solid var(--cyan);color:white;font-weight:700}
+.rs-btn-warn.active{border-color:var(--orange);background:#1a0a04}
+.rs-btn-tiny{padding:3px 8px;font-size:10px}
+
+input[type=range].rs-slider{-webkit-appearance:none;appearance:none;width:100%;height:5px;background:rgba(255,255,255,0.18);border-radius:3px;outline:none;padding:0;margin:0}
+input[type=range].rs-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;background:var(--cyan);border-radius:50%;cursor:pointer;border:2.5px solid white;box-sizing:border-box}
+input[type=range].rs-slider::-moz-range-thumb{width:16px;height:16px;background:var(--cyan);border-radius:50%;cursor:pointer;border:2.5px solid white;box-sizing:border-box}
+
+.coll-icon{color:rgba(255,255,255,0.45);transition:transform 0.28s ease,color 0.18s;flex-shrink:0}
+.collapsible-panel{transition:padding 0.3s ease}
+.is-collapsed.collapsible-panel{padding-bottom:12px}
+.rs-coll-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;margin-bottom:14px}
+.rs-coll-head:hover .coll-icon{color:white}
+.is-collapsed > .rs-coll-head{margin-bottom:0}
+.is-collapsed .coll-icon{transform:rotate(-90deg)}
+.rs-coll-content{overflow:hidden;max-height:1600px;transition:max-height 0.4s cubic-bezier(0.4,0,0.2,1),opacity 0.25s ease 0.05s;opacity:1}
+.is-collapsed > .rs-coll-content{max-height:0;opacity:0;transition:max-height 0.4s cubic-bezier(0.4,0,0.2,1),opacity 0.18s ease}
+.coll-head-inline{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px 10px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(0,159,227,0.15);transition:border-color 0.2s}
+.is-collapsed > .coll-head-inline{border-bottom-color:transparent}
+
+/* HARQ process bank */
+.harq-bank{display:grid;gap:5px;justify-content:start}
+.harq-cell{
+  position:relative;width:46px;height:46px;border-radius:4px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.1);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--rs-font-mono);font-size:11px;color:rgba(255,255,255,0.5);
+  transition:background 0.18s,border-color 0.18s,color 0.18s;
+  font-variant-numeric:tabular-nums;
+}
+@media (max-width:560px){.harq-cell{width:38px;height:38px;font-size:10px}}
+.harq-cell.in-flight{background:rgba(0,159,227,0.22);border-color:var(--cyan);color:white}
+.harq-cell.waiting{background:rgba(255,230,26,0.18);border-color:var(--yellow);color:var(--yellow)}
+.harq-cell.nack{background:rgba(234,91,12,0.25);border-color:var(--orange);color:white}
+.harq-cell.ack-flash{animation:ackFlash 0.5s ease-out}
+@keyframes ackFlash{
+  0%{background:rgba(0,121,115,0.85);border-color:#1ad9d0}
+  100%{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1)}
+}
+
+/* Timeline log */
+.log-window{
+  background:var(--blue5);border-radius:6px;padding:10px 12px;
+  height:170px;overflow:hidden;position:relative;
+  border:1px solid rgba(0,159,227,0.15);
+}
+.log-inner{font-family:var(--rs-font-mono);font-size:11px;line-height:1.55;color:rgba(255,255,255,0.85)}
+.log-line{display:flex;gap:10px;white-space:nowrap;animation:logSlide 0.25s ease-out}
+@keyframes logSlide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.log-ts{color:var(--silver);min-width:62px;font-variant-numeric:tabular-nums}
+.log-tag{min-width:54px;font-weight:600;letter-spacing:0.3px}
+.log-tag.tx{color:var(--cyan)}
+.log-tag.ack{color:#1ad9d0}
+.log-tag.nack{color:var(--orange)}
+.log-tag.stall{color:var(--yellow)}
+.log-tag.rtx{color:var(--orange)}
+.log-msg{color:rgba(255,255,255,0.85)}
+
+/* Throughput bar */
+.tput-bar-wrap{position:relative;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;margin-top:6px}
+.tput-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),#1ad9d0);border-radius:4px;transition:width 0.2s ease}
+.tput-bar-cap{position:absolute;top:-2px;height:12px;width:2px;background:var(--yellow);opacity:0.8}
+
+/* Layout */
+.row-stack{display:flex;flex-direction:column;gap:12px}
+.row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media (max-width:780px){.row-2,.row-3{grid-template-columns:1fr}}
+
+.controls-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+.ctrl-grid{display:grid;grid-template-columns:1.4fr 1fr 0.9fr;gap:20px;align-items:start}
+@media (max-width:900px){.ctrl-grid{grid-template-columns:1fr 1fr;gap:14px}}
+@media (max-width:560px){.ctrl-grid{grid-template-columns:1fr;gap:14px}}
+
+/* Scenario chip */
+.scenario-chip{
+  display:inline-flex;gap:6px;align-items:center;
+  background:rgba(0,159,227,0.12);border:1px solid rgba(0,159,227,0.35);
+  padding:3px 8px;border-radius:4px;font-family:var(--rs-font-mono);font-size:10px;
+  color:var(--cyan);letter-spacing:0.4px;
+}
+.scenario-chip.stall{background:rgba(255,230,26,0.12);border-color:rgba(255,230,26,0.45);color:var(--yellow)}
+
+/* Pipe indicator */
+.pipe-fill-vis{display:flex;gap:3px;margin-top:8px;height:18px}
+.pipe-seg{flex:1;background:rgba(255,255,255,0.06);border-radius:2px;border:1px solid rgba(255,255,255,0.08)}
+.pipe-seg.filled{background:var(--cyan);border-color:var(--cyan)}
+.pipe-seg.empty-bad{background:rgba(255,230,26,0.15);border-color:rgba(255,230,26,0.4)}
+</style>
+</head>
+<body>
+<div class="applet-wrapper">
+
+<div style="padding:4px 0 14px">
+  <p style="margin:0;font-size:11px;color:var(--silver);letter-spacing:0.8px">Reference Plane / Episode 1</p>
+  <h1 style="margin:6px 0 0;font-size:24px;font-weight:500">HARQ in non-terrestrial links</h1>
+  <p style="margin:6px 0 0;font-size:13px;color:var(--silver)">Watch the ACK/NACK pipeline. Stretch the link. See where it stalls.</p>
+</div>
+
+<!-- Main animation canvas -->
+<div class="rs-panel collapsible-panel" id="canvas-panel" style="padding:0;overflow:hidden;margin-bottom:12px;position:relative">
+
+  <!-- Scenario header bar (also acts as collapse toggle) -->
+  <div class="coll-head-inline canvas-head">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="scenario-chip" id="scenario-chip">LEO 1200 km · RTT 8 ms</span>
+      <span class="scenario-chip" id="bler-chip">BLER 10%</span>
+      <span class="scenario-chip stall" id="stall-chip" style="display:none">PIPE STALLED</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="rs-btn rs-btn-tiny" id="pause-btn">Pause</button>
+      <button class="rs-btn rs-btn-tiny" id="speed-btn">0.1×</button>
+      <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+    </div>
+  </div>
+
+  <div class="rs-coll-content">
+  <svg width="100%" viewBox="0 0 1000 420" id="main-svg" style="display:block">
+    <defs>
+      <!-- Glow for active packets -->
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="ueGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#00305f"/>
+        <stop offset="1" stop-color="#001130"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Background grid hint -->
+    <g opacity="0.06" stroke="#009fe3" stroke-width="0.5">
+      <line x1="0" y1="105" x2="1000" y2="105"/>
+      <line x1="0" y1="210" x2="1000" y2="210"/>
+      <line x1="0" y1="315" x2="1000" y2="315"/>
+    </g>
+
+    <!-- Satellite at top -->
+    <g id="sat-group" transform="translate(500, 60)">
+      <rect x="-50" y="-9" width="28" height="18" fill="#a5aaaf" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+      <rect x="22" y="-9" width="28" height="18" fill="#a5aaaf" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+      <rect x="-14" y="-13" width="28" height="26" rx="2" fill="white" stroke="#009fe3" stroke-width="1"/>
+      <rect x="-7" y="-6" width="14" height="6" fill="#009fe3" opacity="0.4"/>
+      <circle cx="0" cy="5" r="2" fill="#009fe3"/>
+      <text x="0" y="-22" fill="#009fe3" font-size="10" text-anchor="middle" letter-spacing="0.8" font-family="var(--rs-font-mono)">gNB</text>
+    </g>
+
+    <!-- UE at bottom -->
+    <g id="ue-group" transform="translate(500, 360)">
+      <!-- Ground line -->
+      <line x1="-440" y1="14" x2="440" y2="14" stroke="rgba(0,159,227,0.25)" stroke-width="1"/>
+      <!-- Handset -->
+      <rect x="-16" y="-22" width="32" height="40" rx="4" fill="url(#ueGrad)" stroke="#009fe3" stroke-width="1"/>
+      <rect x="-12" y="-18" width="24" height="28" rx="1" fill="#001130"/>
+      <circle cx="0" cy="13" r="1.5" fill="#009fe3"/>
+      <!-- Antenna lines -->
+      <line x1="-4" y1="-22" x2="-8" y2="-30" stroke="rgba(0,159,227,0.5)" stroke-width="0.8"/>
+      <line x1="4" y1="-22" x2="8" y2="-30" stroke="rgba(0,159,227,0.5)" stroke-width="0.8"/>
+      <text x="0" y="35" fill="#009fe3" font-size="10" text-anchor="middle" letter-spacing="0.8" font-family="var(--rs-font-mono)">UE</text>
+    </g>
+
+    <!-- Center column markers -->
+    <line x1="500" y1="80" x2="500" y2="340" stroke="rgba(0,159,227,0.08)" stroke-width="1" stroke-dasharray="2 4"/>
+
+    <!-- Side labels: UL and DL -->
+    <text x="265" y="210" fill="rgba(165,170,175,0.6)" font-size="10" text-anchor="end" letter-spacing="1" font-family="var(--rs-font-mono)">UPLINK</text>
+    <text x="265" y="225" fill="rgba(165,170,175,0.4)" font-size="9" text-anchor="end" font-family="var(--rs-font-mono)">UE → gNB</text>
+    <text x="735" y="210" fill="rgba(165,170,175,0.6)" font-size="10" letter-spacing="1" font-family="var(--rs-font-mono)">DOWNLINK</text>
+    <text x="735" y="225" fill="rgba(165,170,175,0.4)" font-size="9" font-family="var(--rs-font-mono)">gNB → UE</text>
+
+    <!-- RTT visual indicator (one-way time as height ladder) -->
+    <g id="time-ladder" opacity="0.4">
+      <line x1="60" y1="80" x2="60" y2="340" stroke="rgba(0,159,227,0.4)" stroke-width="1"/>
+      <text x="50" y="84" fill="var(--cyan)" font-size="9" text-anchor="end" font-family="var(--rs-font-mono)">t=0</text>
+      <text x="50" y="216" fill="var(--silver)" font-size="9" text-anchor="end" font-family="var(--rs-font-mono)">τ</text>
+      <text x="50" y="344" fill="var(--silver)" font-size="9" text-anchor="end" font-family="var(--rs-font-mono)">2τ</text>
+      <line x1="56" y1="80" x2="64" y2="80" stroke="var(--cyan)" stroke-width="1"/>
+      <line x1="56" y1="210" x2="64" y2="210" stroke="rgba(0,159,227,0.4)" stroke-width="1"/>
+      <line x1="56" y1="340" x2="64" y2="340" stroke="rgba(0,159,227,0.4)" stroke-width="1"/>
+    </g>
+
+    <!-- Packets layer (populated by JS) -->
+    <g id="packets-layer"></g>
+
+    <!-- Stall indicator overlay -->
+    <g id="stall-overlay" opacity="0" pointer-events="none">
+      <rect x="450" y="370" width="100" height="22" rx="3" fill="rgba(255,230,26,0.15)" stroke="var(--yellow)" stroke-width="1"/>
+      <text x="500" y="385" fill="var(--yellow)" font-size="11" text-anchor="middle" letter-spacing="1.2" font-family="var(--rs-font-mono)" font-weight="700">UE WAITING</text>
+    </g>
+  </svg>
+  </div>
+</div>
+
+<!-- Scenario controls -->
+<div class="rs-panel rs-panel-mid collapsible-panel" style="margin-bottom:12px;padding:14px 16px">
+  <div class="rs-coll-head">
+    <span class="rs-coll-title">Scenario controls</span>
+    <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+  </div>
+  <div class="rs-coll-content">
+  <div class="ctrl-grid">
+    <div>
+      <p class="rs-label" style="margin-bottom:6px">Link scenario</p>
+      <div class="controls-row">
+        <button class="rs-btn scenario-btn" data-rtt="0.07" data-label="Terrestrial · 10 km">Terrestrial</button>
+        <button class="rs-btn scenario-btn" data-rtt="3.7" data-label="LEO 550 km">LEO Starlink</button>
+        <button class="rs-btn scenario-btn active" data-rtt="8" data-label="LEO 1200 km">LEO OneWeb</button>
+        <button class="rs-btn scenario-btn" data-rtt="55" data-label="MEO 8000 km">MEO</button>
+        <button class="rs-btn scenario-btn" data-rtt="480" data-label="GEO 35786 km">GEO</button>
+      </div>
+    </div>
+    <div>
+      <p class="rs-label" style="margin-bottom:6px">Block error rate (BLER)</p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="range" min="0" max="50" value="10" step="1" id="bler-slider" class="rs-slider" aria-label="Block error rate"/>
+        <span class="mono" style="font-size:12px;color:white;min-width:48px;text-align:right"><span id="bler-out">10</span>%</span>
+      </div>
+    </div>
+    <div>
+      <p class="rs-label" style="margin-bottom:6px">HARQ processes</p>
+      <div class="controls-row">
+        <button class="rs-btn harq-btn rs-btn-warn" data-harq="1">1</button>
+        <button class="rs-btn harq-btn rs-btn-warn active" data-harq="8">8</button>
+        <button class="rs-btn harq-btn" data-harq="16">16</button>
+        <button class="rs-btn harq-btn" data-harq="32">32</button>
+        <button class="rs-btn harq-btn" data-harq="64">64</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- Three info panels, stacked full-width -->
+<div class="row-stack">
+
+  <!-- HARQ process bank -->
+  <div class="rs-panel collapsible-panel">
+    <div class="rs-coll-head">
+      <span class="rs-section-title" style="margin:0">HARQ process bank</span>
+      <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+    </div>
+    <div class="rs-coll-content">
+    <p class="rs-label" style="color:var(--silver);text-transform:none;letter-spacing:0">UE-side process IDs, one TB each</p>
+    <div class="harq-bank" id="harq-bank" style="margin-top:10px"></div>
+    <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap;font-size:10px;color:var(--silver)">
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:9px;height:9px;background:rgba(0,159,227,0.4);border:1px solid var(--cyan);border-radius:2px"></span>in flight</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:9px;height:9px;background:rgba(255,230,26,0.25);border:1px solid var(--yellow);border-radius:2px"></span>awaiting ACK</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:9px;height:9px;background:rgba(234,91,12,0.4);border:1px solid var(--orange);border-radius:2px"></span>NACK, retx</span>
+    </div>
+    <p class="rs-sub">Each cell is one HARQ process. A TB occupies it from first transmission until ACK or max retx.</p>
+    </div>
+  </div>
+
+  <!-- Live event log -->
+  <div class="rs-panel collapsible-panel">
+    <div class="rs-coll-head">
+      <span class="rs-section-title" style="margin:0">Event log</span>
+      <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+    </div>
+    <div class="rs-coll-content">
+    <p class="rs-label" style="color:var(--silver);text-transform:none;letter-spacing:0">UE perspective, last events first</p>
+    <div class="log-window" style="margin-top:10px">
+      <div class="log-inner" id="log-inner"></div>
+    </div>
+    </div>
+  </div>
+
+  <!-- Throughput meter -->
+  <div class="rs-panel collapsible-panel">
+    <div class="rs-coll-head">
+      <span class="rs-section-title" style="margin:0">Pipeline utilization</span>
+      <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+    </div>
+    <div class="rs-coll-content">
+    <p class="rs-label" style="color:var(--silver);text-transform:none;letter-spacing:0">Fraction of Shannon limit achieved</p>
+
+    <div style="margin-top:14px">
+      <div class="rs-number-wrap">
+        <span class="rs-number" id="util-out">100</span><span class="rs-num-unit">%</span>
+      </div>
+      <div class="tput-bar-wrap" style="margin-top:10px">
+        <div class="tput-bar-fill" id="tput-fill" style="width:100%"></div>
+      </div>
+      <p class="rs-mid">N · t_slot / RTT = <span class="rs-mid-em mono" id="ratio-out">1.000</span></p>
+    </div>
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(0,159,227,0.15)">
+      <p class="rs-stat-k">Pipe depth needed</p>
+      <p class="rs-stat-v"><span id="pipe-need-out">4</span> processes</p>
+      <div class="pipe-fill-vis" id="pipe-vis"></div>
+      <p class="rs-sub">One slot = 1 ms. To keep the link full, processes must equal or exceed RTT in slots.</p>
+    </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Stats strip -->
+<div class="rs-panel rs-panel-deep collapsible-panel" style="margin-top:12px;padding:14px 18px">
+  <div class="rs-coll-head">
+    <span class="rs-coll-title">Session totals</span>
+    <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+  </div>
+  <div class="rs-coll-content">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px">
+    <div>
+      <p class="rs-stat-k">TBs transmitted</p>
+      <p class="rs-stat-v"><span id="tx-count">0</span></p>
+    </div>
+    <div>
+      <p class="rs-stat-k">ACKs received</p>
+      <p class="rs-stat-v" style="color:#1ad9d0"><span id="ack-count">0</span></p>
+    </div>
+    <div>
+      <p class="rs-stat-k">NACKs / retx</p>
+      <p class="rs-stat-v" style="color:var(--orange)"><span id="nack-count">0</span></p>
+    </div>
+    <div>
+      <p class="rs-stat-k">Stall slots</p>
+      <p class="rs-stat-v" style="color:var(--yellow)"><span id="stall-count">0</span></p>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- Explainer footer -->
+<div class="rs-panel rs-panel-mid collapsible-panel" style="margin-top:12px;padding:16px 18px">
+  <div class="rs-coll-head">
+    <span class="rs-coll-title">How the protocol works</span>
+    <svg class="coll-icon" viewBox="0 0 12 12" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+  </div>
+  <div class="rs-coll-content">
+  <p style="font-size:12px;color:rgba(255,255,255,0.85);line-height:1.55;margin:0">
+    The UE sends a transport block (TB) on a free HARQ process. The block flies up for one one-way delay (τ). The gNB decodes, then sends an ACK if the CRC passes, or a NACK if it fails. The feedback flies back for another τ, so the UE learns the outcome 2τ after first transmission. While waiting, the UE can use other HARQ processes to keep sending. If N processes × slot time is shorter than the round-trip, the UE runs out of free processes and the link sits idle. That is the NTN HARQ stall.
+  </p>
+  </div>
+</div>
+
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const SVG_NS='http://www.w3.org/2000/svg';
+
+  // ---- State ----
+  const state={
+    rtt_ms:8,             // LEO OneWeb default
+    bler:10,              // 10% default
+    nHarq:8,              // 8 processes default
+    speedX:0.1,           // 0.1x default
+    paused:false,
+    // sim
+    simTime:0,            // ms simulated
+    nextTBId:0,
+    processes:[],         // each: {id, occupied, tbId, txTime, retxCount, awaitingResult, willNack}
+    inFlightPackets:[],   // visual packets
+    log:[],
+    txCount:0,
+    ackCount:0,
+    nackCount:0,
+    stallSlots:0,
+    stallCounter:0,       // accumulator for fractional stall time
+  };
+
+  // Geometry: where UE and gNB are in the SVG
+  const UE_X=500, UE_Y=340;     // visual UE position (top edge of handset)
+  const SAT_X=500, SAT_Y=80;    // visual sat position (bottom edge of satellite)
+  const LINK_HEIGHT=SAT_Y-UE_Y; // negative, link goes up
+
+  // ---- Helpers ----
+  function fmt(n,d){return n.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d})}
+  function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x))}
+
+  // ---- Rebuild the HARQ bank UI when N changes ----
+  function rebuildHarqBank(){
+    const bank=$('harq-bank');
+    bank.innerHTML='';
+    // also rebuild the processes array
+    state.processes=[];
+    for(let i=0;i<state.nHarq;i++){
+      state.processes.push({id:i,occupied:false,tbId:null,txTime:0,retxCount:0,awaitingResult:false,willNack:false});
+      const cell=document.createElement('div');
+      cell.className='harq-cell';
+      cell.id='harq-cell-'+i;
+      cell.textContent=String(i).padStart(2,'0');
+      bank.appendChild(cell);
+    }
+    // Pick column count so cells stay near 46px wide on a ~1000px container.
+    // 1 -> 1 col, 8 -> 8 cols, 16 -> 16 cols, 32 -> 16 cols (2 rows), 64 -> 16 cols (4 rows)
+    let cols;
+    if(state.nHarq<=1)cols=1;
+    else if(state.nHarq<=8)cols=8;
+    else cols=16;
+    bank.style.gridTemplateColumns=`repeat(${cols}, 46px)`;
+  }
+
+  // ---- Render pipe-fill visualization (theoretical) ----
+  function rebuildPipeVis(){
+    const pv=$('pipe-vis');
+    pv.innerHTML='';
+    const needed=Math.max(1,Math.ceil(state.rtt_ms));  // slots needed
+    const total=Math.max(state.nHarq,needed);          // bar width = max
+    const showSegs=Math.min(total,32);                 // cap visual segments
+    const segPerUnit=showSegs/total;
+    const filled=Math.round(state.nHarq*segPerUnit);
+    const neededVis=Math.round(needed*segPerUnit);
+    for(let i=0;i<showSegs;i++){
+      const seg=document.createElement('div');
+      seg.className='pipe-seg';
+      if(i<filled)seg.classList.add('filled');
+      else if(i<neededVis)seg.classList.add('empty-bad');
+      pv.appendChild(seg);
+    }
+    $('pipe-need-out').textContent=needed;
+  }
+
+  // ---- Log ----
+  function addLog(tag,msg){
+    const inner=$('log-inner');
+    const div=document.createElement('div');
+    div.className='log-line';
+    const ts=state.simTime.toFixed(state.simTime<10?2:state.simTime<100?1:0);
+    div.innerHTML=`<span class="log-ts">t=${ts}ms</span><span class="log-tag ${tag}">${tag.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+    inner.insertBefore(div,inner.firstChild);
+    // cap
+    while(inner.childNodes.length>9)inner.removeChild(inner.lastChild);
+  }
+
+  // ---- Packet visuals ----
+  function createPacketVisual(pkt){
+    // pkt: {dir:'up'|'down', kind:'data'|'ack'|'nack', tbId, harqId, startTime, arriveTime}
+    const layer=$('packets-layer');
+    const g=document.createElementNS(SVG_NS,'g');
+    g.setAttribute('class','pkt');
+    g.setAttribute('id','pkt-'+pkt.uid);
+
+    // Compute xOffset FIRST so we can set the initial transform before any paint.
+    // 8 lanes per direction. UP band on the left of center, DOWN band on the right.
+    const lanes=8;
+    const lane=pkt.harqId%lanes;
+    const bandCenter=130;
+    const laneStep=27;
+    const sign=pkt.dir==='up'?-1:1;
+    pkt.xOffset=sign*bandCenter+(lane-(lanes-1)/2)*laneStep;
+    // Initial position at the source (UE for up, sat for down) so the first paint is correct.
+    const startY=pkt.dir==='up'?UE_Y-26:SAT_Y+18;
+    g.setAttribute('transform',`translate(${UE_X+pkt.xOffset},${startY})`);
+    g.setAttribute('opacity','0');
+
+    if(pkt.kind==='data'){
+      // Data packet: small rounded rect with TB ID
+      const rect=document.createElementNS(SVG_NS,'rect');
+      rect.setAttribute('x',-16);rect.setAttribute('y',-9);
+      rect.setAttribute('width',32);rect.setAttribute('height',18);
+      rect.setAttribute('rx',3);
+      rect.setAttribute('fill',pkt.isRetx?'#ea5b0c':'#009fe3');
+      rect.setAttribute('stroke','white');rect.setAttribute('stroke-width','1');
+      rect.setAttribute('filter','url(#glow)');
+      g.appendChild(rect);
+      const txt=document.createElementNS(SVG_NS,'text');
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('y',4);
+      txt.setAttribute('font-size','10');
+      txt.setAttribute('font-family','var(--rs-font-mono)');
+      txt.setAttribute('font-weight','700');
+      txt.setAttribute('fill','white');
+      txt.textContent='TB'+pkt.tbId;
+      g.appendChild(txt);
+    }else if(pkt.kind==='ack'){
+      // ACK: small green pill
+      const rect=document.createElementNS(SVG_NS,'rect');
+      rect.setAttribute('x',-14);rect.setAttribute('y',-7);
+      rect.setAttribute('width',28);rect.setAttribute('height',14);
+      rect.setAttribute('rx',7);
+      rect.setAttribute('fill','#007973');
+      rect.setAttribute('stroke','#1ad9d0');rect.setAttribute('stroke-width','1');
+      g.appendChild(rect);
+      const txt=document.createElementNS(SVG_NS,'text');
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('y',3.2);
+      txt.setAttribute('font-size','9');
+      txt.setAttribute('font-family','var(--rs-font-mono)');
+      txt.setAttribute('font-weight','700');
+      txt.setAttribute('fill','white');
+      txt.textContent='ACK';
+      g.appendChild(txt);
+    }else{
+      // NACK: orange pill
+      const rect=document.createElementNS(SVG_NS,'rect');
+      rect.setAttribute('x',-16);rect.setAttribute('y',-7);
+      rect.setAttribute('width',32);rect.setAttribute('height',14);
+      rect.setAttribute('rx',7);
+      rect.setAttribute('fill','#ea5b0c');
+      rect.setAttribute('stroke','white');rect.setAttribute('stroke-width','1');
+      g.appendChild(rect);
+      const txt=document.createElementNS(SVG_NS,'text');
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('y',3.2);
+      txt.setAttribute('font-size','9');
+      txt.setAttribute('font-family','var(--rs-font-mono)');
+      txt.setAttribute('font-weight','700');
+      txt.setAttribute('fill','white');
+      txt.textContent='NACK';
+      g.appendChild(txt);
+    }
+    layer.appendChild(g);
+    pkt.el=g;
+  }
+
+  function updatePacketPosition(pkt){
+    if(!pkt.el)return;
+    const t=clamp((state.simTime-pkt.startTime)/(pkt.arriveTime-pkt.startTime),0,1);
+    const fromY=pkt.dir==='up'?UE_Y-26:SAT_Y+18;
+    const toY=pkt.dir==='up'?SAT_Y+18:UE_Y-26;
+    const y=fromY+(toY-fromY)*t;
+    const x=UE_X+pkt.xOffset;
+    pkt.el.setAttribute('transform',`translate(${x},${y})`);
+    // fade in/out
+    let op=1;
+    if(t<0.05)op=t/0.05;
+    else if(t>0.95)op=(1-t)/0.05;
+    pkt.el.setAttribute('opacity',clamp(op,0,1));
+  }
+
+  function removePacket(pkt){
+    if(pkt.el&&pkt.el.parentNode)pkt.el.parentNode.removeChild(pkt.el);
+    const i=state.inFlightPackets.indexOf(pkt);
+    if(i>=0)state.inFlightPackets.splice(i,1);
+  }
+
+  // ---- HARQ cell state visuals ----
+  function flashHarqCell(id,cls){
+    const cell=$('harq-cell-'+id);
+    if(!cell)return;
+    cell.classList.add(cls);
+    setTimeout(()=>cell.classList.remove(cls),500);
+  }
+  function refreshHarqCells(){
+    for(let i=0;i<state.processes.length;i++){
+      const p=state.processes[i];
+      const cell=$('harq-cell-'+i);
+      if(!cell)continue;
+      cell.classList.remove('in-flight','waiting','nack');
+      if(p.occupied){
+        if(p.retxCount>0)cell.classList.add('nack');
+        else if(p.awaitingResult)cell.classList.add('waiting');
+        else cell.classList.add('in-flight');
+      }
+    }
+  }
+
+  // ---- Core simulation step ----
+  // Time advances in ms. Each "slot" is 1 ms.
+  // Each tick processes ~1 slot worth of action.
+  // Process pseudo-states:
+  //  free -> tx -> in-flight (up) -> awaiting -> ACK/NACK comes back -> free or retx
+
+  let lastSlotTime=-1;
+  function trySendNewTB(slotTime){
+    // slotTime: the simulated time at which this slot begins. Defaults to current simTime.
+    if(slotTime===undefined)slotTime=state.simTime;
+    // Find first free process
+    const free=state.processes.find(p=>!p.occupied);
+    if(!free)return false;
+    const tbId=state.nextTBId++;
+    free.occupied=true;
+    free.tbId=tbId;
+    free.txTime=slotTime;
+    free.retxCount=0;
+    free.awaitingResult=false; // becomes true once arrived at gNB
+    // Decide outcome now (deterministic from random)
+    free.willNack=(Math.random()*100<state.bler);
+    // Create visual data packet going up
+    const oneWay=state.rtt_ms/2;
+    const pkt={
+      uid:'p'+tbId+'-'+Math.random().toString(36).slice(2,6),
+      dir:'up',kind:'data',tbId:tbId,harqId:free.id,isRetx:false,
+      startTime:slotTime,
+      arriveTime:slotTime+oneWay,
+      processed:false,
+      processRef:free,
+    };
+    state.inFlightPackets.push(pkt);
+    createPacketVisual(pkt);
+    state.txCount++;
+    $('tx-count').textContent=state.txCount;
+    flashHarqCell(free.id,'ack-flash');  // brief flash on send
+    addLog('tx',`HARQ ${String(free.id).padStart(2,'0')} send TB${tbId}`);
+    return true;
+  }
+
+  function sendRetx(p){
+    // p is an occupied process whose previous attempt was NACKed
+    p.txTime=state.simTime;
+    p.retxCount++;
+    p.awaitingResult=false;
+    // Each retransmission has independent BLER (simplification)
+    p.willNack=(Math.random()*100<state.bler*0.6); // chase combining helps; assume reduced BLER on retx
+    const oneWay=state.rtt_ms/2;
+    const pkt={
+      uid:'rp'+p.tbId+'-'+p.retxCount+'-'+Math.random().toString(36).slice(2,6),
+      dir:'up',kind:'data',tbId:p.tbId,harqId:p.id,isRetx:true,
+      startTime:state.simTime,
+      arriveTime:state.simTime+oneWay,
+      processed:false,
+      processRef:p,
+    };
+    state.inFlightPackets.push(pkt);
+    createPacketVisual(pkt);
+    state.txCount++;
+    $('tx-count').textContent=state.txCount;
+    addLog('rtx',`HARQ ${String(p.id).padStart(2,'0')} retx TB${p.tbId} (try ${p.retxCount+1})`);
+  }
+
+  function tick(dt_ms){
+    state.simTime+=dt_ms;
+
+    // 1) Update all in-flight packet positions
+    for(let i=state.inFlightPackets.length-1;i>=0;i--){
+      const pkt=state.inFlightPackets[i];
+      updatePacketPosition(pkt);
+      // Has it arrived?
+      if(!pkt.processed&&state.simTime>=pkt.arriveTime){
+        pkt.processed=true;
+        // Schedule its removal slightly after arrival
+        setTimeout(()=>removePacket(pkt),50);
+        if(pkt.dir==='up'&&pkt.kind==='data'){
+          // gNB decodes. Emit ACK or NACK going back down.
+          const p=pkt.processRef;
+          p.awaitingResult=true;
+          const oneWay=state.rtt_ms/2;
+          const fbPkt={
+            uid:'fb'+p.tbId+'-'+p.retxCount+'-'+Math.random().toString(36).slice(2,6),
+            dir:'down',kind:p.willNack?'nack':'ack',
+            tbId:p.tbId,harqId:p.id,
+            startTime:pkt.arriveTime,
+            arriveTime:pkt.arriveTime+oneWay,
+            processed:false,
+            processRef:p,
+          };
+          state.inFlightPackets.push(fbPkt);
+          createPacketVisual(fbPkt);
+        }else if(pkt.dir==='down'){
+          // UE receives ACK or NACK
+          const p=pkt.processRef;
+          if(pkt.kind==='ack'){
+            // Free the process
+            state.ackCount++;
+            $('ack-count').textContent=state.ackCount;
+            addLog('ack',`HARQ ${String(p.id).padStart(2,'0')} TB${p.tbId} ACKed, free`);
+            p.occupied=false;
+            p.tbId=null;
+            p.awaitingResult=false;
+            p.retxCount=0;
+            flashHarqCell(p.id,'ack-flash');
+          }else{
+            // NACK: trigger retransmission on same process
+            state.nackCount++;
+            $('nack-count').textContent=state.nackCount;
+            // Cap retransmissions; if exceeded, drop and free the process (real systems do this too)
+            if(p.retxCount>=3){
+              addLog('nack',`HARQ ${String(p.id).padStart(2,'0')} TB${p.tbId} dropped (max retx)`);
+              p.occupied=false;
+              p.tbId=null;
+              p.awaitingResult=false;
+              p.retxCount=0;
+            }else{
+              addLog('nack',`HARQ ${String(p.id).padStart(2,'0')} TB${p.tbId} NACK`);
+              sendRetx(p);
+            }
+          }
+        }
+      }
+    }
+
+    // 2) UE tries to send new TBs as long as it has free processes.
+    // Use a while loop so that if a single tick crosses multiple slot boundaries
+    // (possible at high speed × large RTT), each slot is processed once.
+    const currentSlot=Math.floor(state.simTime);
+    while(currentSlot>lastSlotTime){
+      lastSlotTime+=1;
+      // The "actual" simulated time at the start of this slot
+      const slotTime=lastSlotTime;
+      const sent=trySendNewTB(slotTime);
+      if(!sent){
+        // Stall: no free process this slot
+        state.stallCounter+=1;
+        state.stallSlots=Math.floor(state.stallCounter);
+        $('stall-count').textContent=state.stallSlots;
+        if(state.stallSlots%5===1)addLog('stall',`pipeline stalled, all ${state.nHarq} processes busy`);
+      }
+    }
+
+    // 3) Refresh HARQ cell visuals
+    refreshHarqCells();
+
+    // 4) Update stall overlay
+    const allBusy=state.processes.every(p=>p.occupied);
+    const stallOverlay=$('stall-overlay');
+    stallOverlay.setAttribute('opacity',allBusy?'1':'0');
+    $('stall-chip').style.display=allBusy?'inline-flex':'none';
+
+    // 5) Update utilization (running estimate based on theoretical pipe depth)
+    const theoreticalRatio=Math.min(1,state.nHarq*1.0/Math.max(state.rtt_ms,0.1));
+    const util=Math.round(theoreticalRatio*100);
+    $('util-out').textContent=util;
+    $('ratio-out').textContent=theoreticalRatio.toFixed(3);
+    $('tput-fill').style.width=util+'%';
+    $('tput-fill').style.background=util<50?'linear-gradient(90deg,#ea5b0c,#ffe61a)':util<90?'linear-gradient(90deg,#ffe61a,#009fe3)':'linear-gradient(90deg,#009fe3,#1ad9d0)';
+  }
+
+  // ---- Animation loop ----
+  // We map wall time to sim time at a fixed rate: 1 sim-ms = SLOT_WALL_MS wall time at 1x.
+  // That means RTT scales linearly with wall time. For GEO (480 ms RTT), use 10x.
+  const SLOT_WALL_MS=70; // 70 ms wall = 1 ms sim = 1 slot at 1x. Roughly 14 TBs/sec on screen.
+  let lastWall=performance.now();
+  function loop(now){
+    const wallDt=now-lastWall;
+    lastWall=now;
+    if(!state.paused){
+      const simDt=(wallDt/SLOT_WALL_MS)*state.speedX;
+      // Step in small chunks to keep packet arrival logic stable, especially
+      // when RTT/2 is small (e.g. terrestrial) so arrivals are detected each tick.
+      const maxStep=Math.max(0.05,state.rtt_ms/40);
+      const steps=Math.max(1,Math.ceil(simDt/maxStep));
+      for(let i=0;i<steps;i++)tick(simDt/steps);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---- Reset ----
+  function resetSim(){
+    state.simTime=0;
+    state.nextTBId=0;
+    state.txCount=0;
+    state.ackCount=0;
+    state.nackCount=0;
+    state.stallSlots=0;
+    state.stallCounter=0;
+    lastSlotTime=-1;
+    state.log=[];
+    // Clear packets
+    state.inFlightPackets.forEach(p=>{if(p.el&&p.el.parentNode)p.el.parentNode.removeChild(p.el)});
+    state.inFlightPackets=[];
+    // Brute-force clear the SVG packets layer to catch any orphans from in-flight setTimeouts.
+    const layer=$('packets-layer');
+    while(layer.firstChild)layer.removeChild(layer.firstChild);
+    // Clear log
+    $('log-inner').innerHTML='';
+    // Reset stats
+    $('tx-count').textContent='0';
+    $('ack-count').textContent='0';
+    $('nack-count').textContent='0';
+    $('stall-count').textContent='0';
+    rebuildHarqBank();
+    rebuildPipeVis();
+  }
+
+  function updateScenarioChip(){
+    const activeBtn=document.querySelector('.scenario-btn.active');
+    const label=activeBtn?activeBtn.getAttribute('data-label'):'';
+    $('scenario-chip').textContent=`${label} · RTT ${fmt(state.rtt_ms,state.rtt_ms<10?1:0)} ms`;
+    if(state.bler>0){
+      $('bler-chip').style.display='inline-flex';
+      $('bler-chip').textContent=`BLER ${state.bler}%`;
+    }else{
+      $('bler-chip').style.display='none';
+    }
+  }
+
+  // ---- Event wiring ----
+  document.querySelectorAll('.scenario-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('.scenario-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      state.rtt_ms=parseFloat(b.getAttribute('data-rtt'));
+      suggestSpeedForRTT(state.rtt_ms);
+      updateScenarioChip();
+      rebuildPipeVis();
+      resetSim();
+    });
+  });
+  document.querySelectorAll('.harq-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('.harq-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      state.nHarq=parseInt(b.getAttribute('data-harq'));
+      rebuildPipeVis();
+      resetSim();
+    });
+  });
+  $('bler-slider').addEventListener('input',e=>{
+    state.bler=parseInt(e.target.value);
+    $('bler-out').textContent=state.bler;
+    updateScenarioChip();
+  });
+  $('pause-btn').addEventListener('click',()=>{
+    state.paused=!state.paused;
+    $('pause-btn').textContent=state.paused?'Play':'Pause';
+  });
+  const speeds=[0.01,0.1,1,10];
+  let speedIdx=1;
+  $('speed-btn').addEventListener('click',()=>{
+    speedIdx=(speedIdx+1)%speeds.length;
+    state.speedX=speeds[speedIdx];
+    $('speed-btn').textContent=state.speedX+'\u00d7';
+  });
+  // Suggest a sane default speed for each scenario so RTT plays out in seconds
+  function suggestSpeedForRTT(rtt){
+    // Target: full RTT plays in ~3-6 seconds of wall time at chosen speed.
+    // wall RTT = SLOT_WALL_MS * rtt / speedX
+    // target = 4000 ms -> speed = SLOT_WALL_MS * rtt / 4000
+    const target=SLOT_WALL_MS*rtt/4000;
+    // snap to nearest available speed
+    let best=speeds[0],bd=Infinity;
+    speeds.forEach((s,i)=>{const d=Math.abs(s-target);if(d<bd){bd=d;best=s;speedIdx=i}});
+    state.speedX=best;
+    $('speed-btn').textContent=state.speedX+'\u00d7';
+  }
+
+  // ---- Collapsible panels ----
+  document.querySelectorAll('.rs-coll-head, .coll-head-inline').forEach(head=>{
+    head.addEventListener('click',e=>{
+      // Don't collapse when clicking interactive controls within the header
+      if(e.target.closest('button')||e.target.closest('input'))return;
+      const panel=head.closest('.collapsible-panel');
+      if(panel)panel.classList.toggle('is-collapsed');
+    });
+  });
+
+  // ---- Init ----
+  rebuildHarqBank();
+  rebuildPipeVis();
+  updateScenarioChip();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
